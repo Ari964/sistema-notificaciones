@@ -19,7 +19,7 @@ from backend.preprocessing import (preprocess_single_patient, preprocess_trainin
 from backend.explainability import compute_shap_values, generate_explanation, get_feature_importance_from_shap
 from backend.notifications import generate_notification_strategy
 from backend.database import (
-    insert_patient, insert_prediction, insert_notification,
+    init_db, insert_patient, insert_prediction, insert_notification,
     get_all_patients, get_patient_by_id, get_predictions_by_patient,
     get_notifications_by_patient, get_dashboard_stats, get_all_predictions
 )
@@ -51,6 +51,81 @@ def get_model():
     if _model is None:
         _model = get_best_model()
     return _model
+
+
+@app.on_event("startup")
+def startup_event():
+    try:
+        init_db()
+        patients = get_all_patients()
+        if not patients:
+            logger.info("Base de datos sin registros. Generando pacientes iniciales...")
+            model = get_model()
+            if model is None:
+                return
+            sample_patients = [
+                {
+                    "name": "Maria Garcia", "age": 68, "gender": "Femenino",
+                    "medication_type": "Antihipertensivo", "dosage": 10.0,
+                    "education_level": "Secundaria", "income_level": "Medio",
+                    "social_support": "Alto", "disease_severity": "Leve",
+                    "num_comorbidities": 1, "insurance_coverage": "Completa",
+                    "previous_adherence": 1
+                },
+                {
+                    "name": "Carlos Mendoza", "age": 74, "gender": "Masculino",
+                    "medication_type": "Antidiabetico", "dosage": 15.0,
+                    "education_level": "Primaria", "income_level": "Bajo",
+                    "social_support": "Bajo", "disease_severity": "Grave",
+                    "num_comorbidities": 3, "insurance_coverage": "Basica",
+                    "previous_adherence": 0
+                },
+                {
+                    "name": "Rosa Lopez", "age": 71, "gender": "Femenino",
+                    "medication_type": "Anticoagulante", "dosage": 5.0,
+                    "education_level": "Superior", "income_level": "Medio-Alto",
+                    "social_support": "Moderado", "disease_severity": "Moderada",
+                    "num_comorbidities": 2, "insurance_coverage": "Completa",
+                    "previous_adherence": 1
+                },
+                {
+                    "name": "Pedro Sanchez", "age": 82, "gender": "Masculino",
+                    "medication_type": "Hipolipemiante", "dosage": 20.0,
+                    "education_level": "Sin estudios", "income_level": "Bajo",
+                    "social_support": "Bajo", "disease_severity": "Grave",
+                    "num_comorbidities": 4, "insurance_coverage": "Ninguna",
+                    "previous_adherence": 0
+                },
+                {
+                    "name": "Ana Martinez", "age": 65, "gender": "Femenino",
+                    "medication_type": "Antihipertensivo", "dosage": 5.0,
+                    "education_level": "Secundaria", "income_level": "Medio",
+                    "social_support": "Alto", "disease_severity": "Leve",
+                    "num_comorbidities": 1, "insurance_coverage": "Completa",
+                    "previous_adherence": 1
+                }
+            ]
+            for p in sample_patients:
+                try:
+                    X = preprocess_single_patient(p)
+                    prob, adherence_class, risk_level = predict_adherence(model, X)
+                    patient_id = insert_patient(p)
+                    notification = generate_notification_strategy(risk_level, prob, p)
+                    shap_result = compute_shap_values(model, X.reshape(1, -1), X)
+                    prediction_id = insert_prediction(
+                        patient_id, prob, adherence_class, risk_level,
+                        notification["tipo_notificacion"],
+                        json.dumps(shap_result)
+                    )
+                    insert_notification(
+                        patient_id, prediction_id,
+                        notification["tipo_notificacion"],
+                        notification["mensaje"]
+                    )
+                except Exception as ex:
+                    logger.error(f"Error sembrando paciente {p['name']}: {ex}")
+    except Exception as e:
+        logger.error(f"Error en evento startup: {e}")
 
 
 class PatientData(BaseModel):

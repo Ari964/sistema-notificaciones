@@ -22,11 +22,14 @@ def compute_shap_values(model, X_train_background, X_instance):
         X_bg = X_train_background.reshape(X_train_background.shape[0], -1)
         X_inst = X_instance.reshape(1, -1)
 
-        n_background = min(50, X_bg.shape[0])
-        background = shap.sample(shap.kmeans(X_bg, n_background), n_background)
+        n_background = min(20, X_bg.shape[0])
+        background = shap.sample(X_bg, n_background) if X_bg.shape[0] > 0 else X_bg
 
-        explainer = shap.KernelExplainer(model.predict, background)
-        shap_vals = explainer.shap_values(X_inst, nsamples=200)
+        def predict_fn(x):
+            return model.predict(x, verbose=0)
+
+        explainer = shap.KernelExplainer(predict_fn, background)
+        shap_vals = explainer.shap_values(X_inst, nsamples=35)
 
         if isinstance(shap_vals, list):
             shap_vals = shap_vals[0]
