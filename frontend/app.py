@@ -12,7 +12,7 @@ from frontend.xai_views import (render_shap_waterfall, render_shap_comparison_ba
                                  render_patient_risk_gauge, render_model_comparison_chart,
                                  render_confusion_matrices)
 
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 API = f"{BACKEND_URL}/api/v1"
 
 st.set_page_config(
@@ -57,7 +57,7 @@ with st.sidebar:
     page = st.radio(
         "Navegacion",
         ["🏠 Dashboard", "📝 Registro + Prediccion", "📊 Historial Predicciones",
-         "👥 Pacientes", "🧠 Comparar Modelos", "⚙️ Optimizar Hiperparametros",
+         "👥 Pacientes", "📤 Subir Dataset", "🏋️ Entrenar Modelos", "🧠 Comparar Modelos", "⚙️ Optimizar Hiperparametros",
          "⚖️ Auditoria de Equidad", "🔔 Notificaciones"]
     )
     st.divider()
@@ -300,6 +300,164 @@ elif page == "👥 Pacientes":
                         st.info(f"**{notif['notification_type']}** ({notif['created_at']})\n{notif['message']}")
     else:
         st.info("No hay pacientes registrados.")
+
+
+elif page == "📤 Subir Dataset":
+    st.header("Subir Dataset de Entrenamiento")
+
+    st.write("Sube archivos CSV o Excel (.xlsx) con datos de pacientes para entrenar los modelos.")
+
+    st.divider()
+    st.subheader("Datasets Disponibles")
+    ds_list = api_get("/datasets")
+    if ds_list and ds_list.get("datasets"):
+        for ds in ds_list["datasets"]:
+            with st.expander(f"📄 {ds['filename']} - {ds.get('rows', 'N/A')} registros"):
+                if ds.get("columns"):
+                    st.write(f"**Columnas ({len(ds['columns'])}):**")
+                    st.write(", ".join(ds["columns"]))
+                    st.write(f"**Tamaño:** {ds.get('size_kb', 'N/A')} KB")
+                elif ds.get("error"):
+                    st.error(ds["error"])
+
+    st.divider()
+    st.subheader("Subir Nuevo Dataset")
+
+    uploaded_file = st.file_uploader(
+        "Selecciona un archivo CSV o Excel",
+        type=["csv", "xlsx", "xls"],
+        help="Formatos aceptados: CSV, Excel (.xlsx, .xls)"
+    )
+
+    if uploaded_file is not None:
+        st.info(f"Archivo: **{uploaded_file.name}** ({round(uploaded_file.size/1024, 1)} KB)")
+
+        if st.button("Subir y Analizar", type="primary", use_container_width=True):
+            with st.spinner("Subiendo y analizando dataset..."):
+                files = {"file": (uploaded_file.name, uploaded_file.getvalue(),
+                                  uploaded_file.type or "application/octet-stream")}
+                try:
+                    r = requests.post(f"{API}/upload-dataset", files=files, timeout=120)
+                    result = r.json() if r.status_code == 200 else {"error": r.text}
+                except Exception as e:
+                    result = {"error": str(e)}
+
+            if "error" in result:
+                st.error(f"Error: {result['error']}")
+            else:
+                st.success(f"Dataset subido exitosamente: **{result['filename']}**")
+                c1, c2 = st.columns(2)
+                with c1: st.metric("Registros", result["rows"])
+                with c2: st.metric("Columnas", len(result["columns"]))
+
+                st.write("**Columnas detectadas:**")
+                st.write(", ".join(result["columns"]))
+
+                if result.get("preview"):
+                    st.write("**Vista previa (5 primeras filas):**")
+                    st.dataframe(pd.DataFrame(result["preview"]), use_container_width=True)
+
+                st.divider()
+                if st.button("Entrenar Modelos con Este Dataset", type="primary", use_container_width=True):
+                    with st.spinner("Iniciando entrenamiento... Esto puede tomar 3-8 minutos."):
+                        result = api_post("/train-real", {})
+                    if result and "error" not in result:
+                        st.success(result.get("message", "Entrenamiento iniciado"))
+                        st.info("Refresca la pagina en unos minutos para ver las metricas.")
+                    elif result:
+                        st.error(f"Error: {result.get('error', 'Desconocido')}")
+
+    st.divider()
+    st.subheader("Dataset de Referencia (Mendeley)")
+    st.write("**Medication Adherence - Diabetes and Hypertension**")
+    st.write("- 24,084 registros de pacientes")
+    st.write("- Features: Edad, Género, Tipo de Esquema, Cobertura, Hipertensión, Comorbilidad")
+    st.write("- Target: ADHERENT / NON-ADHERENT")
+    st.write("- Fuente: Mendeley Data (CC0)")
+    st.write("- Descarga: https://data.mendeley.com/datasets/zkp7sbbx64/2")
+
+
+elif page == "🏋️ Entrenar Modelos":
+    st.header("Entrenamiento de Modelos de IA")
+
+    st.write("Entrena o reentrena los 5 modelos neuronales (CNN, LSTM, GRU, CNN-LSTM, CNN-GRU) con el dataset actual.")
+    st.info("El dataset contiene 5,000 registros sinteticos generados por `data/generate_data.py` basados en variables clinicas del articulo: edad, genero, tipo de medicacion, nivel educativo, apoyo social, comorbilidades, seguro, etc.")
+
+    model_info = api_get("/model/info")
+    if model_info:
+        st.subheader("Estado Actual del Modelo")
+        c1, c2, c3 = st.columns(3)
+        with c1: st.metric("Version", model_info.get("model_version", "N/A"))
+        with c2: st.metric("Cargado", "Si" if model_info.get("loaded") else "No")
+        with c3:
+            m = model_info.get("metrics", {})
+            best = m.get("best_model", "N/A") if m else "N/A"
+            st.metric("Mejor Modelo", best)
+
+    st.divider()
+    st.subheader("Opciones de Entrenamiento")
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("**Dataset de entrenamiento**")
+        st.write("- 5,000 registros sinteticos")
+        st.write("- 11 variables originales + 7 feature-engineered = 18 features")
+        st.write("- Clases: Adherent (1) / Non-adherent (0)")
+        st.write("- Balanceo: SMOTE por fold en CV-5")
+
+    with col_b:
+        st.markdown("**Modelos que se entrenan**")
+        st.write("- CNN (Convolutional Neural Network)")
+        st.write("- LSTM (Long Short-Term Memory)")
+        st.write("- GRU (Gated Recurrent Unit)")
+        st.write("- CNN-LSTM (hibrido)")
+        st.write("- CNN-GRU (hibrido)")
+
+    st.divider()
+    run_training = st.button("Entrenar Modelos Neuronales", type="primary", use_container_width=True)
+
+    if run_training:
+        with st.spinner("Entrenando 5 modelos neuronales... Esto puede tomar 3-8 minutos."):
+            result = api_post("/train", {})
+
+        if result and "error" not in result:
+            st.success(result.get("message", "Entrenamiento iniciado correctamente"))
+            st.info("El entrenamiento se ejecuta en background. Refresca esta pagina en unos minutos para ver las nuevas metricas.")
+        elif result:
+            st.error(f"Error: {result.get('error', 'Desconocido')}")
+
+    st.divider()
+    st.subheader("Metricas de Modelos Neuronales")
+    nn_metrics = api_get("/metrics")
+    if nn_metrics:
+        render_model_comparison_chart(nn_metrics)
+        st.divider()
+        st.subheader("Matrices de Confusion")
+        render_confusion_matrices(nn_metrics)
+    else:
+        st.warning("No hay metricas disponibles. Ejecute el entrenamiento primero.")
+
+    if nn_metrics:
+        st.divider()
+        st.subheader("Tabla Comparativa")
+        model_names = ["CNN", "LSTM", "GRU", "CNN_LSTM", "CNN_GRU"]
+        rows = []
+        for name in model_names:
+            if name in nn_metrics:
+                m = nn_metrics[name]
+                rows.append({
+                    "Modelo": name,
+                    "Accuracy": m.get("accuracy", 0),
+                    "Precision": m.get("precision", 0),
+                    "Recall": m.get("recall", 0),
+                    "F1-Score": m.get("f1_score", 0),
+                    "AUC-ROC": m.get("auc_roc", 0),
+                })
+        if rows:
+            df = pd.DataFrame(rows).sort_values("AUC-ROC", ascending=False)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            best_row = df.iloc[0]
+            st.success(f"Mejor modelo: **{best_row['Modelo']}** con AUC-ROC = **{best_row['AUC-ROC']:.4f}**")
 
 
 elif page == "🧠 Comparar Modelos":

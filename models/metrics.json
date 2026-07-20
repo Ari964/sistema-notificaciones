@@ -1,88 +1,88 @@
 {
   "CNN": {
-    "accuracy": 0.8711,
-    "precision": 0.8529,
-    "recall": 0.8969,
-    "f1_score": 0.8743,
-    "auc_roc": 0.9478,
+    "accuracy": 0.8758,
+    "precision": 0.8584,
+    "recall": 0.9,
+    "f1_score": 0.8787,
+    "auc_roc": 0.9455,
     "confusion_matrix": [
       [
-        541,
-        99
+        545,
+        95
       ],
       [
-        66,
-        574
+        64,
+        576
       ]
     ]
   },
   "LSTM": {
-    "accuracy": 0.8602,
-    "precision": 0.8425,
-    "recall": 0.8859,
-    "f1_score": 0.8637,
-    "auc_roc": 0.9384,
+    "accuracy": 0.8719,
+    "precision": 0.8584,
+    "recall": 0.8906,
+    "f1_score": 0.8742,
+    "auc_roc": 0.9456,
     "confusion_matrix": [
       [
-        534,
-        106
+        546,
+        94
       ],
       [
-        73,
-        567
+        70,
+        570
       ]
     ]
   },
   "GRU": {
-    "accuracy": 0.8602,
-    "precision": 0.8665,
-    "recall": 0.8516,
-    "f1_score": 0.8589,
-    "auc_roc": 0.9414,
+    "accuracy": 0.8688,
+    "precision": 0.8533,
+    "recall": 0.8906,
+    "f1_score": 0.8716,
+    "auc_roc": 0.9397,
     "confusion_matrix": [
       [
-        556,
-        84
+        542,
+        98
       ],
       [
-        95,
-        545
+        70,
+        570
       ]
     ]
   },
   "CNN-LSTM": {
-    "accuracy": 0.868,
-    "precision": 0.8584,
-    "recall": 0.8812,
-    "f1_score": 0.8697,
-    "auc_roc": 0.9421,
+    "accuracy": 0.8922,
+    "precision": 0.8713,
+    "recall": 0.9203,
+    "f1_score": 0.8951,
+    "auc_roc": 0.9504,
     "confusion_matrix": [
       [
-        547,
-        93
+        553,
+        87
       ],
       [
-        76,
-        564
+        51,
+        589
       ]
     ]
   },
   "CNN-GRU": {
-    "accuracy": 0.8789,
-    "precision": 0.8868,
-    "recall": 0.8688,
-    "f1_score": 0.8777,
-    "auc_roc": 0.942,
+    "accuracy": 0.8648,
+    "precision": 0.8419,
+    "recall": 0.8984,
+    "f1_score": 0.8692,
+    "auc_roc": 0.9428,
     "confusion_matrix": [
       [
-        569,
-        71
+        532,
+        108
       ],
       [
-        84,
-        556
+        65,
+        575
       ]
     ]
   },
-  "best_model": "CNN"
+  "best_model": "CNN-LSTM"
 }

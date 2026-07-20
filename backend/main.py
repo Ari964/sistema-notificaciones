@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List
@@ -11,6 +11,7 @@ import numpy as np
 import json
 import logging
 import pandas as pd
+import shutil
 
 from backend.model import get_best_model, predict_adherence, get_metrics
 from backend.preprocessing import (preprocess_single_patient, preprocess_training,
@@ -311,3 +312,94 @@ def trigger_fairness_audit():
     report = run_full_fairness_audit(df, y, y_pred, y_pred_prob)
 
     return report
+
+
+@app.post("/api/v1/upload-dataset")
+async def upload_dataset(file: UploadFile = File(...)):
+    if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Solo se aceptan archivos CSV o Excel (.xlsx/.xls)")
+
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+    os.makedirs(data_dir, exist_ok=True)
+
+    if file.filename.endswith('.csv'):
+        dest_path = os.path.join(data_dir, "uploaded_dataset.csv")
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        df = pd.read_csv(dest_path)
+    else:
+        dest_path = os.path.join(data_dir, "uploaded_dataset.xlsx")
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        df = pd.read_excel(dest_path)
+
+    return {
+        "filename": file.filename,
+        "rows": len(df),
+        "columns": list(df.columns),
+        "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
+        "preview": df.head(5).to_dict(orient="records"),
+        "saved_to": dest_path
+    }
+
+
+@app.post("/api/v1/train-real")
+def trigger_real_training(background_tasks: BackgroundTasks):
+    background_tasks.add_task(_run_real_training_pipeline)
+    return {"message": "Entrenamiento con datos reales iniciado en background", "status": "queued", "timestamp": datetime.now().isoformat()}
+
+
+def _run_real_training_pipeline():
+    logger.info("Iniciando pipeline de entrenamiento con datos reales...")
+    data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data",
+                              "Final Prepared Dataset - Diabetes and Hypertension Data.xlsx")
+    if not os.path.exists(data_path):
+        data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data",
+                                  "uploaded_dataset.xlsx")
+    if not os.path.exists(data_path):
+        logger.error("Dataset real no encontrado.")
+        return
+
+    df = pd.read_excel(data_path)
+    from backend.preprocessing_real import preprocess_real_training
+    X, y = preprocess_real_training(df)
+    X_nn = X.reshape(X.shape[0], X.shape[1], 1)
+
+    from backend.model import train_models
+    train_models(X_nn, y)
+
+    global _model
+    _model = None
+    logger.info("Entrenamiento con datos reales completado.")
+
+
+@app.get("/api/v1/datasets")
+def list_datasets():
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+    datasets = []
+    for f in os.listdir(data_dir):
+        if f.endswith(('.csv', '.xlsx', '.xls')):
+            fpath = os.path.join(data_dir, f)
+            try:
+                if f.endswith('.csv'):
+                    df = pd.read_csv(fpath)
+                else:
+                    df = pd.read_excel(fpath)
+                datasets.append({
+                    "filename": f,
+                    "rows": len(df),
+                    "columns": list(df.columns),
+                    "size_kb": round(os.path.getsize(fpath) / 1024, 1)
+                })
+            except:
+                datasets.append({"filename": f, "error": "No se pudo leer"})
+    return {"datasets": datasets}
+
+
+@app.get("/api/v1/real-metrics")
+def real_metrics():
+    metrics_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "real_metrics.json")
+    if os.path.exists(metrics_path):
+        with open(metrics_path, "r") as f:
+            return json.load(f)
+    raise HTTPException(status_code=404, detail="Metricas de datos reales no disponibles.")
