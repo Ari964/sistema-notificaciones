@@ -1,0 +1,51 @@
+{
+  "LogisticRegression": {
+    "accuracy": 0.8832,
+    "precision": 0.8123,
+    "recall": 0.8794,
+    "f1_score": 0.8444,
+    "auc_roc": 0.9586,
+    "accuracy_std": 0.0096
+  },
+  "RandomForest": {
+    "accuracy": 0.8722,
+    "precision": 0.8381,
+    "recall": 0.8011,
+    "f1_score": 0.8188,
+    "auc_roc": 0.9439,
+    "accuracy_std": 0.0118
+  },
+  "XGBoost": {
+    "accuracy": 0.8876,
+    "precision": 0.8528,
+    "recall": 0.8322,
+    "f1_score": 0.8422,
+    "auc_roc": 0.9539,
+    "accuracy_std": 0.0074
+  },
+  "LightGBM": {
+    "accuracy": 0.8862,
+    "precision": 0.8481,
+    "recall": 0.8339,
+    "f1_score": 0.8408,
+    "auc_roc": 0.9536,
+    "accuracy_std": 0.008
+  },
+  "GradientBoosting": {
+    "accuracy": 0.8854,
+    "precision": 0.847,
+    "recall": 0.8322,
+    "f1_score": 0.8395,
+    "auc_roc": 0.9546,
+    "accuracy_std": 0.0081
+  },
+  "MLP": {
+    "accuracy": 0.871,
+    "precision": 0.7764,
+    "recall": 0.9089,
+    "f1_score": 0.8356,
+    "auc_roc": 0.9551,
+    "accuracy_std": 0.0121
+  },
+  "best_ensemble_model": "LogisticRegression"
+}
